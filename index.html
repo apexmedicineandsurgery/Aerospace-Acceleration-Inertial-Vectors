@@ -1,0 +1,589 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Human Acceleration Axes Explorer</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Three.js -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+    <!-- OrbitControls -->
+    <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600;800&display=swap" rel="stylesheet">
+    <style>
+        body { font-family: 'Inter', sans-serif; overflow: hidden; background-color: #0f172a; color: white; }
+        
+        /* Custom scrollbar for top/bottom */
+        .h-scrollbar::-webkit-scrollbar { height: 4px; }
+        .h-scrollbar::-webkit-scrollbar-track { background: #1e293b; }
+        .h-scrollbar::-webkit-scrollbar-thumb { background: #475569; border-radius: 2px; }
+        
+        /* Physiological Overlays */
+        #vision-overlay {
+            position: absolute;
+            top: 0; left: 0; width: 100%; height: 100%;
+            pointer-events: none;
+            mix-blend-mode: multiply;
+            transition: all 0.5s ease;
+            z-index: 10;
+            opacity: 0;
+        }
+        
+        /* Redout Overlay */
+        #redout-overlay {
+            position: absolute;
+            top: 0; left: 0; width: 100%; height: 100%;
+            pointer-events: none;
+            background-color: rgba(255, 0, 0, 0.3);
+            mix-blend-mode: overlay;
+            transition: opacity 0.5s ease;
+            z-index: 11;
+            opacity: 0;
+        }
+
+        .btn-axis-top {
+            transition: all 0.2s ease-in-out;
+            white-space: nowrap;
+        }
+        .btn-axis-top:hover {
+            transform: translateY(-2px);
+            background-color: #334155;
+        }
+    </style>
+</head>
+<body class="flex flex-col h-screen w-screen">
+
+    <!-- Visual Effects Layers -->
+    <div id="vision-overlay"></div>
+    <div id="redout-overlay"></div>
+
+    <!-- Top Controls Header -->
+    <header class="w-full bg-slate-900 border-b border-slate-700 z-20 shadow-lg shrink-0">
+        <!-- Title -->
+        <div class="p-4 border-b border-slate-800 bg-slate-950 flex justify-between items-center">
+            <div>
+                <h1 class="text-xl font-extrabold text-blue-400 tracking-tight">AeroG Explorer</h1>
+                <p class="text-slate-400 text-xs mt-1">Human Acceleration: Inertial Vectors</p>
+            </div>
+            <!-- Legend (Top Right) -->
+            <div class="text-xs text-slate-500 hidden sm:block">
+                <div class="flex items-center gap-2 mb-1 justify-end">
+                    <span class="text-right">Arrows Show The Inertial Force Vector</span>
+                    <div class="w-3 h-3 rounded-full bg-yellow-400"></div>
+                </div>
+            </div>
+        </div>
+        <!-- Buttons -->
+        <div class="p-3 h-scrollbar overflow-x-auto">
+            <!-- 
+                FIX: Changed justify-center to justify-start md:justify-center.
+                This anchors the scrollbar to the left on mobile, ensuring 
+                the +Gz button is always visible as the first item.
+            -->
+            <div class="flex flex-row flex-nowrap gap-3 justify-start md:justify-center">
+                <!-- Z Axis -->
+                <button onclick="setGForce('pos_z')" class="btn-axis-top p-3 rounded-lg bg-slate-800 border border-slate-700 hover:border-slate-600">
+                    <span class="font-mono font-bold text-lg text-blue-400">+Gz</span>
+                    <span class="text-xs text-slate-300 ml-2">Heavy in Seat</span>
+                </button>
+                <button onclick="setGForce('neg_z')" class="btn-axis-top p-3 rounded-lg bg-slate-800 border border-slate-700 hover:border-slate-600">
+                    <span class="font-mono font-bold text-lg text-red-400">-Gz</span>
+                    <span class="text-xs text-slate-300 ml-2">Light in Seat / Redout</span>
+                </button>
+                
+                <!-- Separator -->
+                <div class="border-l border-slate-600 h-10 self-center"></div>
+
+                <!-- X Axis -->
+                <button onclick="setGForce('pos_x')" class="btn-axis-top p-3 rounded-lg bg-slate-800 border border-slate-700 hover:border-slate-600">
+                    <span class="font-mono font-bold text-lg text-emerald-400">+Gx</span>
+                    <span class="text-xs text-slate-300 ml-2">Pushed into Seat</span>
+                </button>
+                <button onclick="setGForce('neg_x')" class="btn-axis-top p-3 rounded-lg bg-slate-800 border border-slate-700 hover:border-slate-600">
+                    <span class="font-mono font-bold text-lg text-emerald-400">-Gx</span>
+                    <span class="text-xs text-slate-300 ml-2">Pulled from Seat</span>
+                </button>
+                
+                <!-- Separator -->
+                <div class="border-l border-slate-600 h-10 self-center"></div>
+
+                <!-- Y Axis -->
+                <button onclick="setGForce('pos_y')" class="btn-axis-top p-3 rounded-lg bg-slate-800 border border-slate-700 hover:border-slate-600">
+                    <span class="font-mono font-bold text-lg text-purple-400">+Gy</span>
+                    <span class="text-xs text-slate-300 ml-2">Pushed Left</span>
+                </button>
+                <button onclick="setGForce('neg_y')" class="btn-axis-top p-3 rounded-lg bg-slate-800 border border-slate-700 hover:border-slate-600">
+                    <span class="font-mono font-bold text-lg text-purple-400">-Gy</span>
+                    <span class="text-xs text-slate-300 ml-2">Pushed Right</span>
+                </button>
+                
+                <!-- Separator -->
+                <div class="border-l border-slate-600 h-10 self-center"></div>
+
+                <!-- Reset -->
+                <button onclick="setGForce('reset')" class="btn-axis-top p-3 rounded-lg border border-dashed border-slate-600 text-slate-400 hover:text-white hover:border-white">
+
+                    <span class="text-xs uppercase tracking-wider">Reset to 1G</span>
+                </button>
+            </div>
+        </div>
+    </header>
+
+    <!-- 3D Viewport (Main) -->
+    <main class="flex-1 relative bg-black cursor-move">
+        <div id="canvas-container" class="w-full h-full"></div>
+        <div class="absolute bottom-6 right-6 text-right pointer-events-none select-none">
+            <div class="text-6xl font-black text-white/10">AXIS</div>
+            <div id="axis-label-overlay" class="text-4xl font-black text-white drop-shadow-lg">STATIC</div>
+        </div>
+    </main>
+
+    <!-- Bottom Info Panel -->
+    <footer class="w-full bg-slate-900 border-t border-slate-700 z-20 shadow-lg p-4 lg:p-6 shrink-0">
+        <!-- Current State Display -->
+        <div class="bg-slate-800 rounded-xl p-4 lg:p-5 border border-slate-700 shadow-lg max-w-5xl mx-auto">
+            <div class="flex justify-between items-start gap-4">
+                <div>
+                    <div class="flex items-center mb-2 gap-3">
+                        <h2 id="state-title" class="text-xl md:text-2xl font-bold text-white">Static (1G)</h2>
+                        <span id="current-g-val" class="bg-blue-900 text-blue-200 text-xs font-bold px-2 py-1 rounded">1 G</span>
+                    </div>
+                    <p id="state-desc" class="text-slate-300 text-sm md:text-base leading-relaxed">
+                        The pilot is sitting stationary. Gravity acts downwards. Normal physiological state.
+                    </p>
+                </div>
+            </div>
+        </div>
+    </footer>
+
+
+    <script>
+        // --- Configuration ---
+        const COLORS = {
+            skin: 0xf1c27d,
+            skinPale: 0xe0e5e5,
+            skinRed: 0xaa3333,
+            suit: 0x475569,
+            seat: 0x1e293b,
+            arrow: 0xfacc15 // Yellow
+        };
+
+        // --- Three.js Setup ---
+        const container = document.getElementById('canvas-container');
+        const scene = new THREE.Scene();
+        scene.background = new THREE.Color(0x0f172a); // Slate 900
+        scene.fog = new THREE.Fog(0x0f172a, 10, 50);
+
+        // Camera
+        const camera = new THREE.PerspectiveCamera(45, container.clientWidth / container.clientHeight, 0.1, 100);
+        camera.position.set(5, 3, 6);
+
+        // Renderer
+        const renderer = new THREE.WebGLRenderer({ antialias: true });
+        renderer.setSize(container.clientWidth, container.clientHeight);
+        renderer.shadowMap.enabled = true;
+        renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+        container.appendChild(renderer.domElement);
+
+        // Controls
+        const controls = new THREE.OrbitControls(camera, renderer.domElement);
+        controls.enableDamping = true;
+        controls.dampingFactor = 0.05;
+        controls.minDistance = 3;
+        controls.maxDistance = 15;
+        controls.target.set(0, 1, 0);
+
+        // Lighting
+        const ambientLight = new THREE.AmbientLight(0xffffff, 0.5);
+        scene.add(ambientLight);
+
+        const dirLight = new THREE.DirectionalLight(0xffffff, 1);
+        dirLight.position.set(5, 10, 7);
+        dirLight.castShadow = true;
+        dirLight.shadow.mapSize.width = 1024;
+        dirLight.shadow.mapSize.height = 1024;
+        scene.add(dirLight);
+        
+        const fillLight = new THREE.DirectionalLight(0x3b82f6, 0.3);
+        fillLight.position.set(-5, 0, -5);
+        scene.add(fillLight);
+
+        // --- Geometry Builder ---
+        const pilotGroup = new THREE.Group();
+        
+        // Materials
+        const matSuit = new THREE.MeshStandardMaterial({ color: COLORS.suit, roughness: 0.7 });
+        const matSeat = new THREE.MeshStandardMaterial({ color: COLORS.seat, roughness: 0.5, metalness: 0.2 });
+        const matSkin = new THREE.MeshStandardMaterial({ color: COLORS.skin, roughness: 0.3 });
+        
+        // 1. Seat
+        const seatBase = new THREE.Mesh(new THREE.BoxGeometry(1.2, 0.2, 1.2), matSeat);
+        seatBase.position.y = 0.1;
+        seatBase.receiveShadow = true;
+        
+        const seatBack = new THREE.Mesh(new THREE.BoxGeometry(1.2, 2.2, 0.2), matSeat);
+        seatBack.position.set(0, 1.1, -0.5);
+        seatBack.castShadow = true;
+        seatBack.receiveShadow = true;
+        
+        const seatGroup = new THREE.Group();
+        seatGroup.add(seatBase, seatBack);
+        scene.add(seatGroup);
+
+        // 2. Pilot
+        // Torso
+        const torso = new THREE.Mesh(new THREE.BoxGeometry(0.7, 1.0, 0.5), matSuit);
+        torso.position.set(0, 0.7, -0.1);
+        torso.castShadow = true;
+        pilotGroup.add(torso);
+
+        // Head
+        const headGeo = new THREE.SphereGeometry(0.3, 32, 32);
+        const head = new THREE.Mesh(headGeo, matSkin);
+        head.position.set(0, 1.4, -0.1);
+        head.castShadow = true;
+        pilotGroup.add(head);
+        
+        // Visor (Eyes ref)
+        const visor = new THREE.Mesh(new THREE.BoxGeometry(0.3, 0.1, 0.2), new THREE.MeshStandardMaterial({color: 0x111111, roughness: 0.1, metalness: 0.8}));
+        visor.position.set(0, 1.4, 0.15);
+        pilotGroup.add(visor);
+
+        // Legs (Thighs + Calves)
+        const legGeo = new THREE.CylinderGeometry(0.15, 0.15, 0.8);
+        
+        const leftThigh = new THREE.Mesh(legGeo, matSuit);
+        const leftThighOrigin = { x: -0.2, y: 0.4, z: 0.4 }; // NEW
+        leftThigh.rotation.x = -Math.PI / 2;
+        leftThigh.position.set(leftThighOrigin.x, leftThighOrigin.y, leftThighOrigin.z); // MODIFIED
+        pilotGroup.add(leftThigh);
+
+        const rightThigh = new THREE.Mesh(legGeo, matSuit);
+        const rightThighOrigin = { x: 0.2, y: 0.4, z: 0.4 }; // NEW
+        rightThigh.rotation.x = -Math.PI / 2;
+        rightThigh.position.set(rightThighOrigin.x, rightThighOrigin.y, rightThighOrigin.z); // MODIFIED
+        pilotGroup.add(rightThigh);
+
+        const calfGeo = new THREE.CylinderGeometry(0.12, 0.1, 0.8);
+        const leftCalf = new THREE.Mesh(calfGeo, matSuit);
+        const leftCalfOrigin = { x: -0.2, y: 0, z: 0.8 }; // NEW
+        leftCalf.position.set(leftCalfOrigin.x, leftCalfOrigin.y, leftCalfOrigin.z); // MODIFIED
+        pilotGroup.add(leftCalf);
+
+        const rightCalf = new THREE.Mesh(calfGeo, matSuit);
+        const rightCalfOrigin = { x: 0.2, y: 0, z: 0.8 }; // NEW
+        rightCalf.position.set(rightCalfOrigin.x, rightCalfOrigin.y, rightCalfOrigin.z); // MODIFIED
+        pilotGroup.add(rightCalf);
+
+        // Arms
+        const armGeo = new THREE.CylinderGeometry(0.1, 0.1, 0.9);
+        const leftArm = new THREE.Mesh(armGeo, matSuit);
+        const leftArmOrigin = { x: -0.4, y: 1.1, z: 0 }; // NEW
+        leftArm.position.set(leftArmOrigin.x, leftArmOrigin.y, leftArmOrigin.z); // MODIFIED
+        leftArm.rotation.z = Math.PI / 8;
+        pilotGroup.add(leftArm);
+
+        const rightArm = new THREE.Mesh(armGeo, matSuit);
+        const rightArmOrigin = { x: 0.4, y: 1.1, z: 0 }; // NEW
+        rightArm.position.set(rightArmOrigin.x, rightArmOrigin.y, rightArmOrigin.z); // MODIFIED
+        rightArm.rotation.z = -Math.PI / 8;
+        pilotGroup.add(rightArm);
+
+        scene.add(pilotGroup);
+
+        // 3. Wind Particles
+        let windParticles, windGeometry, windMaterial;
+        const particleCount = 500;
+        const positions = new Float32Array(particleCount * 3);
+        const particleBounds = 8; // Half-size of the particle box
+
+        for (let i = 0; i < particleCount; i++) {
+            positions[i * 3 + 0] = (Math.random() - 0.5) * particleBounds * 2; // x
+            positions[i * 3 + 1] = (Math.random() - 0.5) * particleBounds * 2; // y
+            positions[i * 3 + 2] = (Math.random() - 0.5) * particleBounds * 2; // z
+        }
+
+        windGeometry = new THREE.BufferGeometry();
+        windGeometry.setAttribute('position', new THREE.BufferAttribute(positions, 3));
+        windMaterial = new THREE.PointsMaterial({ color: 0x94a3b8, size: 0.05, transparent: true, opacity: 0.5 });
+        windParticles = new THREE.Points(windGeometry, windMaterial);
+        windParticles.visible = false; // Start hidden
+        scene.add(windParticles);
+
+
+        // 4. Force Arrow Helper
+        // Origin at Pilot Chest
+        const arrowOrigin = new THREE.Vector3(0, 1, 0);
+        const arrowDir = new THREE.Vector3(0, -1, 0);
+        const arrowLen = 0; // Hidden initially
+        const arrowColor = COLORS.arrow;
+        const forceArrow = new THREE.ArrowHelper(arrowDir, arrowOrigin, arrowLen, arrowColor, 0.4, 0.3);
+        scene.add(forceArrow);
+
+        // --- Interaction Logic ---
+
+        const stateTitle = document.getElementById('state-title');
+        const stateDesc = document.getElementById('state-desc');
+        const visionOverlay = document.getElementById('vision-overlay');
+        const redoutOverlay = document.getElementById('redout-overlay');
+        const currentGVal = document.getElementById('current-g-val');
+        const axisLabelOverlay = document.getElementById('axis-label-overlay');
+
+        let currentWindVector = new THREE.Vector3(0, 0, 0);
+        let currentAnimationRequest = null;
+
+        const gStates = {
+            'reset': {
+                title: "Static (1G)",
+                desc: "The normal state. Gravity pulls downwards. Blood distribution is normal.",
+                arrow: new THREE.Vector3(0, -1, 0),
+                len: 0, // No extra Gs
+                color: COLORS.skin,
+                vision: 'none',
+                gText: "1 G",
+                anim: { x: 0, y: 0, z: 0 },
+                limbAnim: { x: 0, y: 0, z: 0 } // NEW
+            },
+            'pos_z': {
+                title: "+Gz (Heavy in Seat)",
+                desc: "<b>Physiology:</b> Inertial force acts from head to toe. Blood is forced down into the legs.<br><b>Symptoms:</b> Grey-out (loss of color vision), Tunnel Vision, Blackout, and eventually G-LOC (Loss of Consciousness). The heart struggles to pump blood up to the brain.",
+                arrow: new THREE.Vector3(0, -1, 0),
+                len: 2.5,
+                color: COLORS.skinPale,
+                vision: 'tunnel',
+                gText: "4 to 9 +Gz",
+                anim: { y: -0.15 }, // MODIFIED: Increased value
+                limbAnim: { x: 0, y: -0.1, z: 0 } // MODIFIED: Increased value
+            },
+            'neg_z': {
+                title: "-Gz (Light in Seat)",
+                desc: "<b>Physiology:</b> Inertial force acts from toe to head. Blood rushes into the head.<br><b>Symptoms:</b> 'Red-out' (seeing red due to blood engorging the eyelids), bursting of small blood vessels in eyes, severe headache. Highly uncomfortable and dangerous.",
+                arrow: new THREE.Vector3(0, 1, 0),
+                len: 2.5,
+                color: COLORS.skinRed,
+                vision: 'redout',
+                gText: "2 to 3 -Gz",
+                anim: { y: 0.15 }, // MODIFIED: Increased value
+                limbAnim: { x: 0, y: 0.1, z: 0 } // MODIFIED: Increased value
+            },
+            'pos_x': {
+                title: "+Gx (Pushed into Seat)",
+                desc: "<b>Physiology:</b> Inertial force pushes the pilot back into the seat (Chest to Back).<br><b>Symptoms:</b> 'Eyeballs in'. Difficulty breathing as the chest is compressed. Humans have high tolerance for this axis (up to 10-15G or more with support).",
+                arrow: new THREE.Vector3(0, 0, -1),
+                len: 2.5,
+                color: COLORS.skin,
+                vision: 'none',
+                gText: "15 to 20 +Gx",
+                anim: { z: -0.15 }, // MODIFIED: Increased value
+                limbAnim: { x: 0, y: 0, z: -0.1 } // MODIFIED: Increased value
+            },
+            'neg_x': {
+                title: "-Gx (Pulled from Seat)",
+                desc: "<b>Physiology:</b> Inertial force pulls the pilot away from the seat (Back to Chest).<br><b>Symptoms:</b> 'Eyeballs out'. Rely entirely on harness/restraints. Painful pressure points from straps. Lower tolerance than +Gx.",
+                arrow: new THREE.Vector3(0, 0, 1),
+                len: 2.5,
+                color: COLORS.skin,
+                vision: 'none',
+                gText: "12 to 15 -Gx",
+                anim: { z: 0.15 }, // MODIFIED: Increased value
+                limbAnim: { x: 0, y: 0, z: 0.1 } // MODIFIED: Increased value
+            },
+            'pos_y': {
+                title: "+Gy (Pushed Left)",
+                desc: "<b>Physiology:</b> Inertial force pushes the pilot to the Left.<br><b>Symptoms:</b> Head and shoulders are thrown left. Neck strain is the primary danger. Hard to keep head upright.",
+                arrow: new THREE.Vector3(1, 0, 0), // CORRECTED: Points RIGHT (+X)
+                len: 2.0,
+                color: COLORS.skin,
+                vision: 'none',
+                gText: "9 to 14 +Gy",
+                anim: { x: 0.15 }, // MODIFIED: Increased value
+                limbAnim: { x: 0.1, y: 0, z: 0 } // MODIFIED: Increased value
+            },
+            'neg_y': {
+                title: "-Gy (Pushed Right)",
+                desc: "<b>Physiology:</b> Inertial force pushes the pilot to the Right.<br><b>Symptoms:</b> Head and shoulders are thrown right. Significant neck strain.",
+                arrow: new THREE.Vector3(-1, 0, 0), // CORRECTED: Points LEFT (-X)
+                len: 2.0,
+                color: COLORS.skin,
+                vision: 'none',
+                gText: "9 to 14 -Gy",
+                anim: { x: -0.15 }, // MODIFIED: Increased value
+                limbAnim: { x: -0.1, y: 0, z: 0 } // MODIFIED: Increased value
+            }
+        };
+
+        // Animation function for pilot movement
+        function playMovementAnimation(targetObject, targetPos, originPos, duration = 150) {
+            // NEW: Cancel any existing animation on THIS object
+            if (targetObject._animationRequest) {
+                cancelAnimationFrame(targetObject._animationRequest);
+                targetObject._animationRequest = null;
+            }
+
+            const startPos = { x: targetObject.position.x, y: targetObject.position.y, z: targetObject.position.z };
+            
+            // NEW: Use provided origin, or default to 0,0,0 (for main group)
+            const finalPos = originPos || { x: 0, y: 0, z: 0 };
+            
+            // NEW: The peak position is the origin + the target offset
+            const peakPos = { 
+                x: finalPos.x + targetPos.x, 
+                y: finalPos.y + targetPos.y, 
+                z: finalPos.z + targetPos.z 
+            };
+            
+            const startTime = performance.now();
+
+            function animate(time) {
+                const elapsed = time - startTime;
+                let progress;
+
+                if (elapsed < duration) {
+                    // Phase 1: Move from current pos to peak
+                    progress = elapsed / duration;
+                    targetObject.position.x = startPos.x + (peakPos.x - startPos.x) * progress;
+                    targetObject.position.y = startPos.y + (peakPos.y - startPos.y) * progress;
+                    targetObject.position.z = startPos.z + (peakPos.z - startPos.z) * progress;
+                } else if (elapsed < (duration * 2)) {
+                    // Phase 2: Move from peak to finalPos
+                    progress = (elapsed - duration) / duration;
+                    targetObject.position.x = peakPos.x + (finalPos.x - peakPos.x) * progress;
+                    targetObject.position.y = peakPos.y + (finalPos.y - peakPos.y) * progress;
+                    targetObject.position.z = peakPos.z + (finalPos.z - peakPos.z) * progress;
+                } else {
+                    // Animation finished, snap to finalPos
+                    targetObject.position.set(finalPos.x, finalPos.y, finalPos.z);
+                    targetObject._animationRequest = null;
+                    return; // Stop requesting frames
+                }
+                targetObject._animationRequest = requestAnimationFrame(animate);
+            }
+            targetObject._animationRequest = requestAnimationFrame(animate);
+        }
+
+        // *** THIS IS THE MAIN INTERACTION FUNCTION ***
+        function setGForce(type) {
+            const data = gStates[type];
+            if (!data) return;
+
+            // 1. Play movement animation
+            // MODIFIED: Pass null for originPos to use default (0,0,0)
+            playMovementAnimation(pilotGroup, data.anim, null, 150); 
+
+            // NEW: Play limb animations
+            const limbAnim = data.limbAnim;
+            const limbDuration = 120; // Slightly faster/jankier for secondary motion
+            playMovementAnimation(leftArm, limbAnim, leftArmOrigin, limbDuration);
+            playMovementAnimation(rightArm, limbAnim, rightArmOrigin, limbDuration);
+            playMovementAnimation(leftThigh, limbAnim, leftThighOrigin, limbDuration);
+            playMovementAnimation(rightThigh, limbAnim, rightThighOrigin, limbDuration);
+            playMovementAnimation(leftCalf, limbAnim, leftCalfOrigin, limbDuration);
+            playMovementAnimation(rightCalf, limbAnim, rightCalfOrigin, limbDuration);
+
+
+            // 2. Set wind direction and visibility
+            if (type === 'reset') {
+                currentWindVector.set(0, 0, 0);
+                windParticles.visible = false;
+            } else {
+                currentWindVector.copy(data.arrow).normalize().multiplyScalar(0.2); // 0.2 is wind speed
+                windParticles.visible = true;
+            }
+
+            // 3. Update Text
+            stateTitle.innerHTML = data.title;
+            stateDesc.innerHTML = data.desc;
+            currentGVal.innerText = data.gText;
+            axisLabelOverlay.innerText = type === 'reset' ? 'STATIC' : type.toUpperCase().replace('_', '');
+
+            // 4. Update Head Color (with smooth animation)
+            const targetColor = new THREE.Color(data.color);
+            const start = performance.now();
+            const duration = 500; // 0.5 second transition
+
+            function animateColor(time) {
+                const elapsed = time - start;
+                const progress = Math.min(elapsed / duration, 1);
+                
+                // Lerp 10% of the remaining distance each frame.
+                // This gives a smooth ease-out effect.
+                head.material.color.lerp(targetColor, 0.1); 
+                
+                if (progress < 1) {
+                    // Only continue animating if we're not done
+                    // and if the color isn't already the target
+                    if (!head.material.color.equals(targetColor)) {
+                         requestAnimationFrame(animateColor);
+                    }
+                } else {
+                    // Snap to final color to ensure accuracy
+                    head.material.color.set(targetColor); 
+                }
+            }
+            requestAnimationFrame(animateColor);
+
+            // 5. Update Visual Overlays
+            if (data.vision === 'tunnel') {
+                visionOverlay.style.background = "radial-gradient(circle, transparent 30%, #000 90%)";
+                visionOverlay.style.opacity = 0.8;
+                redoutOverlay.style.opacity = 0;
+            } else if (data.vision === 'redout') {
+                visionOverlay.style.opacity = 0;
+                redoutOverlay.style.opacity = 1;
+            } else {
+                visionOverlay.style.opacity = 0;
+                redoutOverlay.style.opacity = 0;
+            }
+
+            // 6. Update the Arrow
+            forceArrow.setLength(data.len);
+            forceArrow.setDirection(data.arrow.clone().normalize());
+        }
+
+
+        // --- Animation Loop ---
+        function animateWind() {
+            if (!windParticles.visible) return;
+
+            const positions = windParticles.geometry.attributes.position.array;
+            const wind = currentWindVector;
+            const bounds = particleBounds; 
+
+            for (let i = 0; i < positions.length; i += 3) {
+                positions[i + 0] += wind.x;
+                positions[i + 1] += wind.y;
+                positions[i + 2] += wind.z;
+
+                // Wrap particles around the box
+                if (positions[i + 0] > bounds) positions[i + 0] = -bounds;
+                if (positions[i + 0] < -bounds) positions[i + 0] = bounds;
+                
+                if (positions[i + 1] > bounds) positions[i + 1] = -bounds;
+                if (positions[i + 1] < -bounds) positions[i + 1] = bounds;
+
+                if (positions[i + 2] > bounds) positions[i + 2] = -bounds;
+                if (positions[i + 2] < -bounds) positions[i + 2] = bounds;
+            }
+            windParticles.geometry.attributes.position.needsUpdate = true;
+        }
+
+        function animate() {
+            requestAnimationFrame(animate);
+            controls.update();
+            animateWind(); // Call the wind animation
+            renderer.render(scene, camera);
+        }
+
+        // Handle Resize
+        window.addEventListener('resize', () => {
+            camera.aspect = container.clientWidth / container.clientHeight;
+            camera.updateProjectionMatrix();
+            renderer.setSize(container.clientWidth, container.clientHeight);
+        });
+
+        // Start the animation loop
+        animate();
+
+    </script>
+</body>
+</html>
